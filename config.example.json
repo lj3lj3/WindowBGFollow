@@ -1,0 +1,6 @@
+{
+  "// 说明": "whitelist 非空时仅列表内 app 生效；whitelist 为空时跳过 blacklist 内的 app；值均为 bundle id",
+  "// 查询": "osascript -e 'id of app \"应用名\"'",
+  "whitelist": [],
+  "blacklist": []
+}

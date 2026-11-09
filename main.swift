@@ -377,7 +377,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         WindowTracker.shared.start()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "🖼"
+        // SF Symbol 模板图，自动适配系统深浅色与菜单栏风格
+        if let img = NSImage(systemSymbolName: "photo.on.rectangle.angled", accessibilityDescription: "WindowBGFollow") {
+            img.isTemplate = true
+            item.button?.image = img
+        }
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "退出 WindowBGFollow", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
