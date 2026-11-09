@@ -219,11 +219,15 @@ final class WindowTracker: NSObject {
             (info[kCGWindowOwnerPID as String] as? Int) == Int(app.processIdentifier) &&
             (info[kCGWindowBounds as String] as? [String: Any]).flatMap(cgRect).map { $0.width >= 200 && $0.height >= 100 } ?? false
         }
+        // 取面积最大的常规窗口作为主窗口：地址栏下拉、扩展弹窗等临时窗口面积更小，不会被误选
+        func area(_ info: [String: Any]) -> CGFloat {
+            (info[kCGWindowBounds as String] as? [String: Any]).flatMap(cgRect).map { $0.width * $0.height } ?? 0
+        }
         if accessibilityGranted, let focused = focusedWindowNumber(pid: app.processIdentifier),
            normalWindows.contains(where: { ($0[kCGWindowNumber as String] as? Int).map({ UInt32($0) }) == focused }) {
             return focused
         }
-        return normalWindows.first?[kCGWindowNumber as String] as? UInt32
+        return normalWindows.max(by: { area($0) < area($1) })?[kCGWindowNumber as String] as? UInt32
     }
 
     /// AX 元素按窗口号精确匹配（供 observer 绑定）
@@ -376,26 +380,34 @@ final class WindowTracker: NSObject {
         }
     }
 
-    // MARK: 兜底巡检（1Hz）
+    // MARK: 兜底巡检（250ms）
 
     private func healthCheck() {
         if !accessibilityGranted { requestAccessibility() }
         reloadConfig()   // 配置热生效（图片仅启动时加载，不热替换）
-        guard let num = targetNumber, accessibilityGranted else { return }
-        // 轻量存活检测：前台 app 的 AX 焦点窗口号是否仍等于目标窗口号，
-        // 不一致（关闭/切窗口）即重定目标，单次 AX 调用，免去全量 CGWindowList 拷贝
-        guard let app = NSWorkspace.shared.frontmostApplication else { return }
-        let axApp = AXUIElementCreateApplication(app.processIdentifier)
-        var value: CFTypeRef?
-        // 焦点暂不可读（动画期等）不算失配，等下轮巡检
-        guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &value) == .success,
-              let v = value else { return }
-        let focused = unsafeDowncast(v, to: AXUIElement.self)
-        var focusedNum: CGWindowID = 0
-        if AXUIElementGetWindowFn(focused, &focusedNum) == .success, focusedNum == CGWindowID(num) {
+        guard let num = targetNumber, accessibilityGranted,
+              let app = NSWorkspace.shared.frontmostApplication else { return }
+        // 焦点窗口号比对：一致则保持（单次 AX 调用即可）
+        if focusedWindowNumber(pid: app.processIdentifier) == num {
             if activeOverlay?.isVisible != true { showOverlay() }
-        } else {
+            return
+        }
+        // 不一致时只在「目标窗口已消失」或「焦点切到另一个常规窗口」时重定目标；
+        // 地址栏下拉/扩展弹窗/状态气泡等临时窗口抢焦点一律忽略
+        let focusedNum = focusedWindowNumber(pid: app.processIdentifier)
+        let list = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+        let targetAlive = list.contains { info in
+            (info[kCGWindowNumber as String] as? Int).map({ UInt32($0) }) == num &&
+            (info[kCGWindowOwnerPID as String] as? Int) == Int(app.processIdentifier)
+        }
+        let focusedIsNormalWindow = list.contains { info in
+            (info[kCGWindowNumber as String] as? Int).map({ UInt32($0) }) == focusedNum &&
+            (info[kCGWindowBounds as String] as? [String: Any]).flatMap(cgRect).map { r in r.width >= 200 && r.height >= 100 } ?? false
+        }
+        if !targetAlive || focusedIsNormalWindow {
             retarget(to: app)
+        } else {
+            if activeOverlay?.isVisible != true { showOverlay() }
         }
     }
 }
