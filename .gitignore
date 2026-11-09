@@ -1,0 +1,13 @@
+# 构建产物
+WindowBGFollow.app/
+*.o
+.build/
+
+# 运行时本地文件（用户自备，不入库）
+bg.jpg
+bg.jpeg
+bg.png
+config.json
+
+# 系统文件
+.DS_Store

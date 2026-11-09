@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WindowBGFollow — macOS 窗口背后跟随图片工具</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #171a23; --line: #262b38; --txt: #d7dce6;
+    --muted: #8b93a5; --accent: #6ea8fe; --ok: #4ade80; --warn: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--txt); font: 15px/1.75 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
+  .shell { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 36px; }
+  h1 { font-size: 34px; letter-spacing: .5px; }
+  h1 .en { color: var(--accent); }
+  .lead { color: var(--muted); margin-top: 12px; font-size: 16px; }
+  .pills { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; font-size: 13px; color: var(--muted); }
+  .pill b { color: var(--txt); font-weight: 600; }
+  h2 { font-size: 21px; margin: 44px 0 16px; padding-left: 12px; border-left: 3px solid var(--accent); }
+  h3 { font-size: 16px; margin: 24px 0 10px; color: var(--accent); }
+  p { margin: 10px 0; }
+  code { background: #1d2230; border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; font-size: 13px; font-family: "SF Mono", Menlo, monospace; }
+  pre { background: #12151d; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; overflow-x: auto; margin: 14px 0; }
+  pre code { background: none; border: none; padding: 0; font-size: 13px; line-height: 1.6; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 9px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--card); color: var(--txt); font-weight: 600; white-space: nowrap; }
+  td { color: var(--muted); }
+  td b, td code { color: var(--txt); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 18px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card h4 { font-size: 15px; margin-bottom: 6px; }
+  .card p { font-size: 13.5px; color: var(--muted); margin: 0; }
+  .flow { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px; margin: 16px 0; }
+  .flow .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .node { background: #1d2230; border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; font-size: 13.5px; }
+  .node.hot { border-color: var(--accent); color: var(--accent); }
+  .arrow { color: var(--muted); }
+  .note { background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.35); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; color: #e8d49a; margin: 14px 0; }
+  footer { margin-top: 60px; border-top: 1px solid var(--line); padding-top: 20px; color: var(--muted); font-size: 13px; }
+  a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<header>
+  <h1><span class="en">WindowBGFollow</span> · 窗口背后跟随背景图</h1>
+  <p class="lead">原生 Swift 实现的 macOS 工具：让一张背景图实时贴在当前焦点窗口背后，随切换、拖动、缩放同步，为窗口提供可透出的背景层。</p>
+  <div class="pills">
+    <span class="pill"><b>macOS 12+</b> · Tahoe 验证</span>
+    <span class="pill">单文件 Swift · <b>~380 行</b></span>
+    <span class="pill">CPU 基线 <b>~0.7%</b></span>
+    <span class="pill">辅助功能授权 <b>×1</b></span>
+  </div>
+</header>
+
+<h2>一、核心特性</h2>
+<div class="grid">
+  <div class="card"><h4>精确 z-order 垫底</h4><p>order(.below, relativeTo:) 真配对——目标窗口被盖时背景跟着被盖，非桌面壁纸式近似。</p></div>
+  <div class="card"><h4>实时跟随</h4><p>AX 事件 + 拖拽期 60Hz 补帧双通道，切换/拖动/缩放逐帧同步。</p></div>
+  <div class="card"><h4>每屏常驻副本</h4><p>每个显示器一个独立 overlay，永不跨屏移动，切换显示器零闪现。</p></div>
+  <div class="card"><h4>快速关闭响应</h4><p>AX 销毁通知 + 250ms 焦点巡检兜底，残留 ≤250ms。</p></div>
+  <div class="card"><h4>低资源</h4><p>静止 CPU ~0.7%，图片 720p 基线降采样解码。</p></div>
+  <div class="card"><h4>可配置</h4><p>背景图与 app 白/黑名单均为独立文件，配置热生效。</p></div>
+</div>
+
+<h2>二、运行原理</h2>
+<div class="flow">
+  <div class="row">
+    <span class="node">激活通知 / 250ms 巡检</span><span class="arrow">→</span>
+    <span class="node">CGWindowList 定位焦点窗口</span><span class="arrow">→</span>
+    <span class="node hot">order(.below) 垫到窗口后</span><span class="arrow">→</span>
+    <span class="node">AXObserver + 拖拽 60Hz 补帧</span>
+  </div>
+</div>
+<table>
+  <tr><th>模块</th><th>机制</th></tr>
+  <tr><td>目标定位</td><td>CGWindowList 过滤 layer 0 + 前台 app PID，无需权限</td></tr>
+  <tr><td>垫底排序</td><td>NSWindow.order(.below, relativeTo: 窗口号)，窗口号全局有效、跨进程</td></tr>
+  <tr><td>移动跟随</td><td>AXObserver 订阅 moved/resized；拖拽期 leftMouseDragged 触发 60Hz 补帧</td></tr>
+  <tr><td>关闭检测</td><td>AXUIElementDestroyed 通知 + 250ms 焦点窗口号比对巡检</td></tr>
+  <tr><td>跨屏防闪</td><td>按屏维护 overlay 副本，切屏=换副本，无跨屏位移</td></tr>
+</table>
+<div class="note">权限仅要求辅助功能（Accessibility）；读取窗口 frame 不需要屏幕录制权限。</div>
+
+<h2>三、构建与运行</h2>
+<pre><code>git clone &lt;repo-url&gt; &amp;&amp; cd WindowBGFollow
+./build.sh
+open WindowBGFollow.app</code></pre>
+<p>首次运行后在 <b>系统设置 → 隐私与安全性 → 辅助功能</b> 勾选 WindowBGFollow。</p>
+
+<h2>四、配置</h2>
+<h3>背景图</h3>
+<pre><code>WindowBGFollow/
+├── WindowBGFollow.app
+├── bg.jpg        ← 背景图（bg.jpg / bg.jpeg / bg.png，替换后重启 app）
+└── config.json   ← app 过滤配置（可选，热生效）</code></pre>
+<p>启动时按 <b>720p 基线</b>（最长边 1280px）降采样解码；渲染为 aspect-fill 裁剪 + 26px 圆角（对齐 macOS 26）。</p>
+<h3>app 过滤（config.json）</h3>
+<pre><code>{
+  "whitelist": [],
+  "blacklist": ["com.tencent.wechat"]
+}</code></pre>
+<table>
+  <tr><th>字段</th><th>语义</th></tr>
+  <tr><td>whitelist</td><td>非空时仅列表内 app 生效</td></tr>
+  <tr><td>blacklist</td><td>白名单为空时跳过列表内 app</td></tr>
+  <tr><td>留空</td><td>两列表均空 = 对所有 app 生效</td></tr>
+</table>
+<p>值为 bundle id，查询：<code>osascript -e 'id of app "应用名"'</code>；修改后 ~250ms 热生效。</p>
+
+<h2>五、已知边界（系统级硬限制）</h2>
+<table>
+  <tr><th>场景</th><th>表现</th><th>原因</th></tr>
+  <tr><td>不透明窗口（Chrome/Finder）</td><td>整图被盖住，仅圆角缺口透出</td><td>窗口不透明是 app 自身属性，外部无法穿透采样</td></tr>
+  <tr><td>关闭残留</td><td>极端情况 ≤250ms</td><td>部分 app 不发 AXUIElementDestroyed，靠巡检兜底</td></tr>
+  <tr><td>拖动流畅度</td><td>落后合成 1~2 帧</td><td>WindowServer 合成帧率是追踪类工具的物理极限</td></tr>
+</table>
+
+<h2>六、实现备忘（给维护者）</h2>
+<table>
+  <tr><th>坑</th><th>处置</th></tr>
+  <tr><td>AXUIElementGetWindow 未暴露给 Swift</td><td>dlsym 从 ApplicationServices / HIServices 动态加载，缺失时降级</td></tr>
+  <tr><td>macOS 26 SDK 签名变化</td><td>AXUIElementCopyAttributeValue 已是 3 参数（无 error 指针）</td></tr>
+  <tr><td>AXObserver 静默失效</td><td>必须强持有 + 手动挂 RunLoop source，retarget 时移除旧 source</td></tr>
+  <tr><td>切换全屏闪图</td><td>showOverlay 只用 order(.below)，禁止 orderFront</td></tr>
+</table>
+
+<footer>
+  License: MIT · 纯本地运行，无网络请求、无数据收集 · 文档与代码同步维护于仓库
+</footer>
+
+</div>
+</body>
+</html>
