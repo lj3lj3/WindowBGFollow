@@ -198,14 +198,32 @@ final class WindowTracker: NSObject {
 
     // MARK: 目标定位
 
-    /// CGWindowList 找目标 app 的 layer 0 前台窗口（无需权限）
+    /// 前台 app 的 AX 焦点窗口号（主窗口，链接悬停产生的 URL 状态气泡不会成为焦点窗口）
+    private func focusedWindowNumber(pid: pid_t) -> UInt32? {
+        let axApp = AXUIElementCreateApplication(pid)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &value) == .success,
+              let v = value else { return nil }
+        var num: CGWindowID = 0
+        guard AXUIElementGetWindowFn(unsafeDowncast(v, to: AXUIElement.self), &num) == .success else { return nil }
+        return UInt32(num)
+    }
+
+    /// 目标窗口定位：优先 AX 焦点窗口号；兜底 CGWindowList 取 layer 0 且尺寸合理的窗口
     private func findWindowNumber(of app: NSRunningApplication) -> UInt32? {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
                 as? [[String: Any]] else { return nil }
-        return list.first { info in
+        // 状态气泡/悬浮小窗是 Chrome 的独立 layer 0 窗口，尺寸过滤排除（宽 < 200 或高 < 100）
+        let normalWindows = list.filter { info in
             (info[kCGWindowLayer as String] as? Int) == 0 &&
-            (info[kCGWindowOwnerPID as String] as? Int) == Int(app.processIdentifier)
-        }?[kCGWindowNumber as String] as? UInt32
+            (info[kCGWindowOwnerPID as String] as? Int) == Int(app.processIdentifier) &&
+            (info[kCGWindowBounds as String] as? [String: Any]).flatMap(cgRect).map { $0.width >= 200 && $0.height >= 100 } ?? false
+        }
+        if accessibilityGranted, let focused = focusedWindowNumber(pid: app.processIdentifier),
+           normalWindows.contains(where: { ($0[kCGWindowNumber as String] as? Int).map({ UInt32($0) }) == focused }) {
+            return focused
+        }
+        return normalWindows.first?[kCGWindowNumber as String] as? UInt32
     }
 
     /// AX 元素按窗口号精确匹配（供 observer 绑定）
