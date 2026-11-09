@@ -92,15 +92,23 @@
 ./build.sh
 open WindowBGFollow.app</code></pre>
 <p>首次运行后在 <b>系统设置 → 隐私与安全性 → 辅助功能</b> 勾选 WindowBGFollow。</p>
+<p><b>安装到 /Applications（推荐）：</b></p>
+<pre><code>mv WindowBGFollow.app /Applications/
+mkdir -p ~/Library/Application\ Support/WindowBGFollow
+cp config.example.json ~/Library/Application\ Support/WindowBGFollow/config.json
+# 放一张背景图：cp 你的图.jpg ~/Library/Application\ Support/WindowBGFollow/bg.jpg
+open /Applications/WindowBGFollow.app</code></pre>
 
 <h2>四、配置</h2>
-<h3>背景图</h3>
-<pre><code>WindowBGFollow/
-├── WindowBGFollow.app
+<h3>背景图与配置文件</h3>
+<pre><code>/Applications/WindowBGFollow.app                      ← 程序
+~/Library/Application Support/WindowBGFollow/
 ├── bg.jpg        ← 背景图（bg.jpg / bg.jpeg / bg.png，替换后重启 app）
 └── config.json   ← app 过滤配置（可选，热生效）</code></pre>
+<p>路径解析为<b>兼容模式</b>（按序取第一个存在的文件）：① <code>~/Library/Application Support/WindowBGFollow/</code>（推荐标准位置）→ ② app 同目录（便携式）→ ③ bundle 内 Resources（默认兜底）。</p>
 <p>启动时按 <b>720p 基线</b>（最长边 1280px）降采样解码；渲染为 aspect-fill 裁剪 + 26px 圆角（对齐 macOS 26）。</p>
 <h3>app 过滤（config.json）</h3>
+<p>模板见仓库 <code>config.example.json</code>。</p>
 <pre><code>{
   "whitelist": [],
   "blacklist": ["com.tencent.wechat"]

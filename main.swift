@@ -118,11 +118,21 @@ final class WindowTracker: NSObject {
 
     // MARK: 资源加载（图片 + 配置，均位于 app 所在目录，替换即生效）
 
-    /// 图片查找顺序：app 同目录 bg.jpg/png → bundle Resources；降采样解码控制内存
+    /// 配置目录：标准位置 ~/Library/Application Support/WindowBGFollow（目录不存在则创建）
+    private func supportDir() -> URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("WindowBGFollow", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// 图片查找顺序（兼容模式）：Application Support → app 同目录 → bundle Resources
     private func resolveImagePath() -> URL? {
         let appDir = Bundle.main.bundleURL.deletingLastPathComponent()
-        let candidates: [URL] = ["bg.jpg", "bg.jpeg", "bg.png"].map { appDir.appendingPathComponent($0) }
-            + ["bg.jpg", "bg.jpeg", "bg.png"].map { Bundle.main.resourceURL!.appendingPathComponent($0) }
+        let names = ["bg.jpg", "bg.jpeg", "bg.png"]
+        let candidates = names.map { supportDir().appendingPathComponent($0) }
+            + names.map { appDir.appendingPathComponent($0) }
+            + names.map { Bundle.main.resourceURL!.appendingPathComponent($0) }
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
@@ -141,8 +151,11 @@ final class WindowTracker: NSObject {
     }
 
     /// 仅重载配置（healthCheck 每 250ms 调用；图片不参与热替换）
+    /// 查找顺序（兼容模式）：Application Support → app 同目录
     private func reloadConfig() {
-        let configURL = Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("config.json")
+        let candidates = [supportDir().appendingPathComponent("config.json"),
+                          Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("config.json")]
+        guard let configURL = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else { return }
         let cmtime = (try? FileManager.default.attributesOfItem(atPath: configURL.path))?[.modificationDate] as? Date
         if cmtime != configMtime {
             configMtime = cmtime

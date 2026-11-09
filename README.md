@@ -45,28 +45,46 @@ flowchart LR
 ```bash
 git clone <repo-url> && cd WindowBGFollow
 ./build.sh
-open WindowBGFollow.app
+open WindowBGFollow.app          # 或先移动：mv WindowBGFollow.app /Applications/
 ```
 
 首次运行在 **系统设置 → 隐私与安全性 → 辅助功能** 中勾选 WindowBGFollow。
 
+**安装到 /Applications（推荐）**：
+
+```bash
+mv WindowBGFollow.app /Applications/
+mkdir -p ~/Library/Application\ Support/WindowBGFollow
+cp config.example.json ~/Library/Application\ Support/WindowBGFollow/config.json
+# 放一张背景图：cp 你的图.jpg ~/Library/Application\ Support/WindowBGFollow/bg.jpg
+open /Applications/WindowBGFollow.app
+```
+
 ## 配置
 
-### 背景图
+### 背景图与配置文件
 
-将图片放到 app 所在目录（与 `WindowBGFollow.app` 并排），命名为：
+推荐将 app 安装到 `/Applications`，用户文件放在标准目录：
 
 ```
-WindowBGFollow/
-├── WindowBGFollow.app
+/Applications/WindowBGFollow.app                      ← 程序
+~/Library/Application Support/WindowBGFollow/
 ├── bg.jpg        ← 背景图（支持 bg.jpg / bg.jpeg / bg.png，优先级从左到右）
 └── config.json   ← app 过滤配置（可选）
 ```
 
-- 启动时加载一次，按 720p 基线（最长边 1280px）降采样解码，替换图片后重启 app 生效
+路径解析为**兼容模式**（按顺序取第一个存在的文件）：
+
+1. `~/Library/Application Support/WindowBGFollow/`（推荐，标准位置）
+2. app 同目录（与 `.app` 并排，适合便携式使用）
+3. bundle 内 `Resources/`（打包默认图兜底）
+
+- 图片启动时加载一次，按 720p 基线（最长边 1280px）降采样解码，替换图片后重启 app 生效
 - 渲染方式为 aspect-fill 裁剪填充 + 26px 圆角（对齐 macOS 26 窗口圆角）
 
 ### app 过滤（config.json）
+
+位置见上节（推荐 `~/Library/Application Support/WindowBGFollow/config.json`），模板见仓库 `config.example.json`：
 
 ```json
 {
@@ -96,13 +114,16 @@ WindowBGFollow/
 
 ```
 WindowBGFollow/
-├── main.swift        # 全部实现（~380 行）
-├── Info.plist        # LSUIElement 菜单栏应用声明
-├── build.sh          # swiftc 编译 + ad-hoc 签名 + 打包 .app
-├── Resources/bg.jpg  # 默认背景图（打包进 bundle）
+├── main.swift              # 全部实现（~400 行）
+├── Info.plist              # LSUIElement 菜单栏应用声明
+├── build.sh                # swiftc 编译 + ad-hoc 签名 + 打包 .app
+├── Resources/bg.jpg        # 默认背景图（打包进 bundle，兜底）
+├── config.example.json     # 配置模板
 ├── README.md
-└── README.html       # 本文档的网页版
+└── README.html             # 本文档的网页版
 ```
+
+运行时用户文件（不入库）：`~/Library/Application Support/WindowBGFollow/{bg.jpg, config.json}`
 
 ## 实现备忘（给维护者）
 
